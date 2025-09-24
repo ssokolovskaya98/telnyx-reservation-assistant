@@ -1,7 +1,7 @@
 # Last Minute Restaurant Booking Assistant
 
 An AI-powered voice assistant that helps you find and book **last-minute restaurant reservations** over the phone.  
-Built with **FastAPI** + **Telnyx Voice AI** + **Model Context Protocol (MCP)**.
+Built with **FastAPI** + **Telnyx Voice AI** + **Model Context Protocol (MCP)** + **Render**
 
 This project demonstrates how to integrate conversational AI with real-time APIs and external services to solve a real-world problem:  
 > “I need an Italian restaurant in Boston for 6 people at 6 PM, can you tell me where I can make a reservation?”
@@ -22,9 +22,9 @@ This project demonstrates how to integrate conversational AI with real-time APIs
 
 - FASTAPI
 - Telnyx
-- ngrok
 - Render
 - PostgreSQL
+- PgAdmin
 
 ---
 
