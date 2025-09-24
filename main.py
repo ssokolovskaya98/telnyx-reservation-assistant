@@ -145,15 +145,25 @@ def cancel_endpoint(params: dict):
 from fastapi import Request
 from fastapi.responses import JSONResponse
 
+app = FastAPI()
+
 @app.post("/mcp")
 async def mcp_handler(request: Request):
     try:
+        # === 1. Handle Telnyx API Key ===
+        api_key = request.headers.get("x-api-key")
+        print("Telnyx x-api-key:", api_key)
+        # For demo, we don't validate it. But you could validate against your Integration Secret here if desired.
+
+        # === 2. Parse MCP Request ===
         payload = await request.json()
         method = payload.get("method")
         request_id = payload.get("id")
         params = payload.get("params", {})
+
+        # === 3. Handle get_tools (Telnyx MCP discovery) ===
         if method == "get_tools":
-            
+
             tools = [
                 {
                     "name": "list_restaurants",
@@ -192,6 +202,7 @@ async def mcp_handler(request: Request):
                 "result": {"tools": tools}
             })
 
+        # === 4. Handle list_restaurants ===
         elif method == "list_restaurants":
 
             restaurants = await get_all_restaurants()
@@ -201,6 +212,7 @@ async def mcp_handler(request: Request):
                 "result": restaurants
             })
 
+        # === 5. Handle check_availability ===
         elif method == "check_availability":
 
             restaurant_id = params.get("restaurant_id")
@@ -211,6 +223,7 @@ async def mcp_handler(request: Request):
                 "result": availability
             })
 
+        # === 6. Handle book_reservation ===
         elif method == "book_reservation":
 
             result = await create_reservation(
@@ -224,7 +237,8 @@ async def mcp_handler(request: Request):
                 "id": request_id,
                 "result": result
             })
-        
+
+        # === 7. Unknown method ===
         else:
             return JSONResponse({
                 "jsonrpc": "2.0",
@@ -238,5 +252,5 @@ async def mcp_handler(request: Request):
             "id": None,
             "error": {"code": -32000, "message": str(e)}
         })
-
-
+    
+    
