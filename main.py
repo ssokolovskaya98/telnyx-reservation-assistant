@@ -151,10 +151,9 @@ async def mcp_handler(request: Request):
         payload = await request.json()
         method = payload.get("method")
         request_id = payload.get("id")
-
-        # --- Handle JSON-RPC methods ---
+        params = payload.get("params", {})
         if method == "get_tools":
-            # Define tools your assistant can use
+            
             tools = [
                 {
                     "name": "list_restaurants",
@@ -194,7 +193,7 @@ async def mcp_handler(request: Request):
             })
 
         elif method == "list_restaurants":
-            # Example: query your restaurants table
+
             restaurants = await get_all_restaurants()
             return JSONResponse({
                 "jsonrpc": "2.0",
@@ -203,7 +202,7 @@ async def mcp_handler(request: Request):
             })
 
         elif method == "check_availability":
-            params = payload.get("params", {})
+
             restaurant_id = params.get("restaurant_id")
             availability = await get_availability(restaurant_id)
             return JSONResponse({
@@ -213,7 +212,7 @@ async def mcp_handler(request: Request):
             })
 
         elif method == "book_reservation":
-            params = payload.get("params", {})
+
             result = await create_reservation(
                 params.get("restaurant_id"),
                 params.get("time"),
@@ -225,13 +224,12 @@ async def mcp_handler(request: Request):
                 "id": request_id,
                 "result": result
             })
-
-        # --- If unknown method ---
+        
         else:
             return JSONResponse({
                 "jsonrpc": "2.0",
                 "id": request_id,
-                "error": {"code": -32601, "message": "Method not found"}
+                "error": {"code": -32601, "message": f"Unknown method {method}"}
             })
 
     except Exception as e:
