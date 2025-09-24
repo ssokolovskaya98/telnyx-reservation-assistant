@@ -1,0 +1,16 @@
+﻿restaurant_id,restaurant,city,cuisine,description,price,cancellation_fee
+1,MIDA,Boston,Italian,A neighborhood-restaurant feel; handmade pastas and thoughtful Italian cooking,$$$,TRUE
+2,Carmelina's,Boston,Italian,"traditional fare, classic entrees like saltimbocca and seafood pastas",$$,FALSE
+3,Punjabi Dhaba,Boston,Indian,"casual, great for classic Punjabi dishes",$,FALSE
+4,Himalayan Bistro,Boston,Indian,mix of Indian & Himalayan style,$$,FALSE
+5,Gene’s Chinese Flatbread Cafe,Boston,Chinese,noted for hand-pulled noodles and flatbreads,$$,FALSE
+6,Go Chi,Boston,Chinese,"modern, elevated Chinese food",$$$,FALSE
+7,Bostonia Public House,Boston,American,"refined rustic, good for a classic American meal",$$,FALSE
+8,Yvonne’s,Boston,American,supper club with a bit of flair serving american cuisine,$$$,FALSE
+9,Oleana,Boston,Mediterranean,excellent Middle Eastern / Mediterranean fusion,$$$$,FALSE
+10,Sarma,Boston,Mediterranean,"lively spot, mezes, ideal for sharing",$$,FALSE
+11,Carlo’s Cucina Italiana,Boston,Italian,"More casual, homestyle Italian; great for good portions and comfort food",$,TRUE
+12,Shanti,Boston,Indian,"large menu, good variety of curries",$$,TRUE
+13,Sumiao Hunan Kitchen,Boston,Chinese,"for spicy, regional Hunan cooking",$,FALSE
+14,Eastern Standard,Boston,American,modern brasserie with American classics,$$$,FALSE
+15,Eva,Boston,Mediterranean,bright atmosphere and a strong Mediterranean menu,$$,TRUE
