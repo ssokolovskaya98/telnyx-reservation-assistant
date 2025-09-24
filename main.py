@@ -1,166 +1,167 @@
-from fastapi import FastAPI, HTTPException
+# main.py
+from fastapi import FastAPI, HTTPException, Request
 import psycopg2
-from pydantic import BaseModel
-from datetime import date, time
+import os
+from dotenv import load_dotenv
+
+# Load env vars
+load_dotenv(".env")
+
+def get_conn():
+    return psycopg2.connect(
+        dbname=os.getenv("DB_NAME"),
+        user=os.getenv("DB_USER"),
+        password=os.getenv("DB_PASSWORD"),
+        host=os.getenv("DB_HOST"),
+        port=os.getenv("DB_PORT")
+    )
 
 app = FastAPI()
 
-from dotenv import load_dotenv
-import os
+@app.get("/health")
+def health():
+    return {"status": "ok"}
 
-load_dotenv(".env")
+# ----------------------------
+# Business Logic
+# ----------------------------
+def search_availability(params: dict):
+    """Find available restaurants by cuisine, date, time, and party size."""
+    cuisine = params.get("cuisine")
+    party_size = params.get("party_size")
+    date = params.get("date")   # format: '2025-09-24'
+    time = params.get("time")   # format: '19:00:00'
 
-conn = psycopg2.connect(
-    dbname=os.getenv("DB_NAME"),
-    user=os.getenv("DB_USER"),
-    password=os.getenv("DB_PASSWORD"),
-    host=os.getenv("DB_HOST"),
-    port=os.getenv("DB_PORT")
-)
-cur = conn.cursor()
-
-# ---- Models for booking/canceling ----
-class Booking(BaseModel):
-    restaurant_id: int
-    user_name: str
-    reservation_date: date
-    reservation_time: time
-
-class CancelReservation(BaseModel):
-    reservation_id: int
-
-# ---- Endpoints ----
-@app.get("/restaurants")
-def get_restaurants():
-    cur.execute("SELECT restaurant_id, price, cancellation_fee FROM public.restaurants;")
-    rows = cur.fetchall()
-    return [{"restaurant_id": r[0], "price": r[1], "cancellation_fee": r[2]} for r in rows]
-
-from typing import Optional
-from datetime import date, time
-
-@app.get("/availability")
-def get_availability(
-    restaurant_id: Optional[int] = None,
-    restaurant_name: Optional[str] = None,
-    cuisine: Optional[str] = None,
-    res_date: Optional[date] = None,
-    res_time: Optional[time] = None,
-    party_size: Optional[int] = None
-):
-    """
-    Flexible availability search:
-    - Can filter by restaurant_id, name, cuisine
-    - Can filter by date, time
-    - Returns all available slots if no filters are provided
-    """
-
-    # Base query
     query = """
-        SELECT a.restaurant_id, r.restaurant, r.cuisine, a.date, a.time
-        FROM public.availability a
-        JOIN public.restaurants r ON a.restaurant_id = r.restaurant_id
-        WHERE a.is_available = TRUE
+        SELECT a.availability_id,
+               r.restaurant_id,
+               r.restaurant,
+               r.city,
+               r.cuisine,
+               r.price,
+               a.date,
+               a.time,
+               a.available_seats
+        FROM availability a
+        JOIN restaurants r ON a.restaurant_id = r.restaurant_id
+        WHERE (%s IS NULL OR r.cuisine ILIKE %s)
+          AND a.available_seats >= %s
+          AND a.date = %s
+          AND a.time = %s
     """
-    params = []
 
-    # Add optional filters
-    if restaurant_id:
-        query += " AND a.restaurant_id = %s"
-        params.append(restaurant_id)
-    if restaurant_name:
-        query += " AND r.restaurant = %s"
-        params.append(restaurant_name)
-    if cuisine:
-        query += " AND r.cuisine = %s"
-        params.append(cuisine)
-    if res_date:
-        query += " AND a.date = %s"
-        params.append(res_date)
-    if res_time:
-        query += " AND a.time = %s"
-        params.append(res_time)
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(query, (cuisine, cuisine, party_size, date, time))
+            rows = cur.fetchall()
+            cols = [desc[0] for desc in cur.description]
 
-    # You could filter party_size here if you have a capacity column in restaurants
+    return [dict(zip(cols, row)) for row in rows]
 
-    cur.execute(query, tuple(params))
-    rows = cur.fetchall()
+def create_reservation(params: dict):
+    """Book a reservation and decrement available seats."""
+    restaurant_id = params["restaurant_id"]
+    availability_id = params["availability_id"]
+    user_name = params["user_name"]
+    party_size = params["party_size"]
+    date = params["date"]
+    time = params["time"]
 
-    # Return structured response
-    return [
-        {
-            "restaurant_id": r[0],
-            "restaurant": r[1],
-            "cuisine": r[2],
-            "date": r[3],
-            "time": r[4]
-        }
-        for r in rows
-    ]
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            # Check availability
+            cur.execute("SELECT available_seats FROM availability WHERE availability_id=%s FOR UPDATE", (availability_id,))
+            avail = cur.fetchone()
+            if not avail or avail[0] < party_size:
+                raise HTTPException(status_code=400, detail="Not enough seats available")
 
-@app.post("/book")
-def book_reservation(booking: Booking):
-    # Check availability first
-    cur.execute(
-        """
-        SELECT is_available FROM public.availability
-        WHERE restaurant_id = %s AND date = %s AND time = %s;
-        """,
-        (booking.restaurant_id, booking.reservation_date, booking.reservation_time)
-    )
-    result = cur.fetchone()
-    if not result or result[0] is False:
-        raise HTTPException(status_code=400, detail="Slot not available")
+            # Insert reservation
+            cur.execute(
+                """
+                INSERT INTO reservations (restaurant_id, user_name, reservation_date, reservation_time, party_size)
+                VALUES (%s, %s, %s, %s, %s)
+                RETURNING reservation_id
+                """,
+                (restaurant_id, user_name, date, time, party_size)
+            )
+            reservation_id = cur.fetchone()[0]
 
-    # Insert reservation
-    cur.execute(
-        """
-        INSERT INTO public.reservations (restaurant_id, user_name, reservation_date, reservation_time)
-        VALUES (%s, %s, %s, %s)
-        RETURNING reservation_id;
-        """,
-        (booking.restaurant_id, booking.user_name, booking.reservation_date, booking.reservation_time)
-    )
-    reservation_id = cur.fetchone()[0]
+            # Update availability
+            cur.execute(
+                "UPDATE availability SET available_seats = available_seats - %s WHERE availability_id=%s",
+                (party_size, availability_id)
+            )
 
-    # Update availability
-    cur.execute(
-        """
-        UPDATE public.availability
-        SET is_available = FALSE
-        WHERE restaurant_id = %s AND date = %s AND time = %s;
-        """,
-        (booking.restaurant_id, booking.reservation_date, booking.reservation_time)
-    )
+    return {"reservation_id": reservation_id, "message": "Reservation confirmed!"}
 
-    conn.commit()
-    return {"message": "Reservation booked", "reservation_id": reservation_id}
+def cancel_reservation(params: dict):
+    """Cancel a reservation and restore available seats."""
+    reservation_id = params["reservation_id"]
+
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            # Look up reservation
+            cur.execute("SELECT * FROM reservations WHERE reservation_id=%s FOR UPDATE", (reservation_id,))
+            res = cur.fetchone()
+            if not res:
+                raise HTTPException(status_code=404, detail="Reservation not found")
+
+            colnames = [desc[0] for desc in cur.description]
+            rowdict = dict(zip(colnames, res))
+
+            # Delete the reservation (since your schema has no status column)
+            cur.execute("DELETE FROM reservations WHERE reservation_id=%s", (reservation_id,))
+
+            # Restore seats in availability
+            cur.execute(
+                """
+                UPDATE availability
+                SET available_seats = available_seats + %s
+                WHERE restaurant_id=%s AND date=%s AND time=%s
+                """,
+                (rowdict["party_size"], rowdict["restaurant_id"], rowdict["reservation_date"], rowdict["reservation_time"])
+            )
+
+    return {"message": "Reservation cancelled"}
+
+# ----------------------------
+# REST Endpoints (testing)
+# ----------------------------
+@app.post("/search")
+def search_endpoint(params: dict):
+    return search_availability(params)
+
+@app.post("/reserve")
+def reserve_endpoint(params: dict):
+    return create_reservation(params)
 
 @app.post("/cancel")
-def cancel_reservation(cancel: CancelReservation):
-    # Get reservation info
-    cur.execute(
-        "SELECT restaurant_id, reservation_date, reservation_time FROM public.reservations WHERE reservation_id = %s;",
-        (cancel.reservation_id,)
-    )
-    res = cur.fetchone()
-    if not res:
-        raise HTTPException(status_code=404, detail="Reservation not found")
+def cancel_endpoint(params: dict):
+    return cancel_reservation(params)
 
-    restaurant_id, res_date, res_time = res
+# ----------------------------
+# MCP Endpoint (for Telnyx)
+# ----------------------------
+@app.post("/mcp")
+async def mcp_handler(req: Request):
+    """JSON-RPC handler for Telnyx MCP integration."""
+    body = await req.json()
+    method = body.get("method")
+    params = body.get("params") or {}
+    rpc_id = body.get("id")
 
-    # Delete reservation
-    cur.execute(
-        "DELETE FROM public.reservations WHERE reservation_id = %s;",
-        (cancel.reservation_id,)
-    )
+    try:
+        if method == "search_availability":
+            result = search_availability(params)
+        elif method == "create_reservation":
+            result = create_reservation(params)
+        elif method == "cancel_reservation":
+            result = cancel_reservation(params)
+        else:
+            return {"jsonrpc": "2.0", "id": rpc_id, "error": {"message": "Unknown method"}}
 
-    # Make slot available again
-    cur.execute(
-        "UPDATE public.availability SET is_available = TRUE WHERE restaurant_id = %s AND date = %s AND time = %s;",
-        (restaurant_id, res_date, res_time)
-    )
-
-    conn.commit()
-    return {"message": "Reservation canceled successfully"}
-
+        return {"jsonrpc": "2.0", "id": rpc_id, "result": result}
+    except HTTPException as e:
+        return {"jsonrpc": "2.0", "id": rpc_id, "error": {"code": e.status_code, "message": e.detail}}
+    except Exception as e:
+        return {"jsonrpc": "2.0", "id": rpc_id, "error": {"message": str(e)}}
