@@ -142,10 +142,15 @@ def cancel_endpoint(params: dict):
 # ----------------------------
 # MCP Endpoint (for Telnyx)
 # ----------------------------
+
 @app.post("/mcp")
 async def mcp_handler(req: Request):
-    """JSON-RPC handler for Telnyx MCP integration."""
-    body = await req.json()
+    try:
+        body = await req.json()
+    except Exception:
+        # Return empty JSON-RPC response if request isn’t proper
+        return {"jsonrpc": "2.0", "id": None, "error": {"message": "Invalid JSON"}}
+
     method = body.get("method")
     params = body.get("params") or {}
     rpc_id = body.get("id")
@@ -161,7 +166,6 @@ async def mcp_handler(req: Request):
             return {"jsonrpc": "2.0", "id": rpc_id, "error": {"message": "Unknown method"}}
 
         return {"jsonrpc": "2.0", "id": rpc_id, "result": result}
-    except HTTPException as e:
-        return {"jsonrpc": "2.0", "id": rpc_id, "error": {"code": e.status_code, "message": e.detail}}
+    
     except Exception as e:
         return {"jsonrpc": "2.0", "id": rpc_id, "error": {"message": str(e)}}
