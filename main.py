@@ -142,67 +142,103 @@ def cancel_endpoint(params: dict):
 
 ###MCP Endpoint (for Telnyx)
 
+from fastapi import Request
+from fastapi.responses import JSONResponse
+
 @app.post("/mcp")
-async def mcp_handler(req: Request):
+async def mcp_handler(request: Request):
     try:
-        body = await req.json()
-    except Exception:
+        payload = await request.json()
+        method = payload.get("method")
+        request_id = payload.get("id")
 
-        return {"jsonrpc": "2.0", "id": None, "error": {"message": "Invalid JSON"}}
+        # --- Handle JSON-RPC methods ---
+        if method == "get_tools":
+            # Define tools your assistant can use
+            tools = [
+                {
+                    "name": "list_restaurants",
+                    "description": "Get all restaurants in the directory",
+                    "input_schema": {"type": "object", "properties": {}}
+                },
+                {
+                    "name": "check_availability",
+                    "description": "Check open slots for a restaurant",
+                    "input_schema": {
+                        "type": "object",
+                        "properties": {
+                            "restaurant_id": {"type": "integer"}
+                        },
+                        "required": ["restaurant_id"]
+                    }
+                },
+                {
+                    "name": "book_reservation",
+                    "description": "Book a reservation at a restaurant",
+                    "input_schema": {
+                        "type": "object",
+                        "properties": {
+                            "restaurant_id": {"type": "integer"},
+                            "time": {"type": "string"},
+                            "name": {"type": "string"},
+                            "party_size": {"type": "integer"}
+                        },
+                        "required": ["restaurant_id", "time", "name", "party_size"]
+                    }
+                }
+            ]
+            return JSONResponse({
+                "jsonrpc": "2.0",
+                "id": request_id,
+                "result": {"tools": tools}
+            })
 
-    method = body.get("method")
-    params = body.get("params") or {}
-    rpc_id = body.get("id")
+        elif method == "list_restaurants":
+            # Example: query your restaurants table
+            restaurants = await get_all_restaurants()
+            return JSONResponse({
+                "jsonrpc": "2.0",
+                "id": request_id,
+                "result": restaurants
+            })
 
-    # Dynamic Webhook Variables
+        elif method == "check_availability":
+            params = payload.get("params", {})
+            restaurant_id = params.get("restaurant_id")
+            availability = await get_availability(restaurant_id)
+            return JSONResponse({
+                "jsonrpc": "2.0",
+                "id": request_id,
+                "result": availability
+            })
 
-    if method == "get_dynamic_variables":
-        cuisine = params.get("cuisine")
-        party_size = int(params.get("party_size", 1))
-        date = params.get("date")
-        time = params.get("time")
+        elif method == "book_reservation":
+            params = payload.get("params", {})
+            result = await create_reservation(
+                params.get("restaurant_id"),
+                params.get("time"),
+                params.get("name"),
+                params.get("party_size")
+            )
+            return JSONResponse({
+                "jsonrpc": "2.0",
+                "id": request_id,
+                "result": result
+            })
 
-        # Query DB for availability
-        results = search_availability({
-            "cuisine": cuisine,
-            "party_size": party_size,
-            "date": date,
-            "time": time
-        })
-
-        if results:
-            first = results[0]  
-            return {
-                "restaurant": first["restaurant"],
-                "available_seats": first["available_seats"],
-                "date": first["date"],
-                "time": first["time"]
-            }
+        # --- If unknown method ---
         else:
-            return {
-                "restaurant": None,
-                "available_seats": 0,
-                "date": date,
-                "time": time
-            }
-
-
-    # JSON-RPC Methods
-
-    try:
-        if method == "search_availability":
-            result = search_availability(params)
-        elif method == "create_reservation":
-            # Expect params: restaurant_id, availability_id, user_name, party_size, date, time
-            result = create_reservation(params)
-        elif method == "cancel_reservation":
-            # Expect param: reservation_id
-            result = cancel_reservation(params)
-        else:
-            return {"jsonrpc": "2.0", "id": rpc_id, "error": {"message": "Unknown method"}}
-
-        return {"jsonrpc": "2.0", "id": rpc_id, "result": result}
+            return JSONResponse({
+                "jsonrpc": "2.0",
+                "id": request_id,
+                "error": {"code": -32601, "message": "Method not found"}
+            })
 
     except Exception as e:
-        return {"jsonrpc": "2.0", "id": rpc_id, "error": {"message": str(e)}}
+        return JSONResponse({
+            "jsonrpc": "2.0",
+            "id": None,
+            "error": {"code": -32000, "message": str(e)}
+        })
+
 
