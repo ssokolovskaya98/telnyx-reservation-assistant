@@ -1,10 +1,11 @@
-# main.py
+#main.py
 from fastapi import FastAPI, HTTPException, Request
 import psycopg2
 import os
 from dotenv import load_dotenv
 
-# Load env vars
+# Load env variables
+
 load_dotenv(".env")
 
 def get_conn():
@@ -22,9 +23,7 @@ app = FastAPI()
 def health():
     return {"status": "ok"}
 
-# ----------------------------
-# Business Logic
-# ----------------------------
+
 def search_availability(params: dict):
     """Find available restaurants by cuisine, date, time, and party size."""
     cuisine = params.get("cuisine")
@@ -69,6 +68,7 @@ def create_reservation(params: dict):
 
     with get_conn() as conn:
         with conn.cursor() as cur:
+
             # Check availability
             cur.execute("SELECT available_seats FROM availability WHERE availability_id=%s FOR UPDATE", (availability_id,))
             avail = cur.fetchone()
@@ -100,6 +100,7 @@ def cancel_reservation(params: dict):
 
     with get_conn() as conn:
         with conn.cursor() as cur:
+
             # Look up reservation
             cur.execute("SELECT * FROM reservations WHERE reservation_id=%s FOR UPDATE", (reservation_id,))
             res = cur.fetchone()
@@ -124,9 +125,9 @@ def cancel_reservation(params: dict):
 
     return {"message": "Reservation cancelled"}
 
-# ----------------------------
+
 # REST Endpoints (testing)
-# ----------------------------
+
 @app.post("/search")
 def search_endpoint(params: dict):
     return search_availability(params)
@@ -139,33 +140,69 @@ def reserve_endpoint(params: dict):
 def cancel_endpoint(params: dict):
     return cancel_reservation(params)
 
-# ----------------------------
-# MCP Endpoint (for Telnyx)
-# ----------------------------
+###MCP Endpoint (for Telnyx)
 
 @app.post("/mcp")
 async def mcp_handler(req: Request):
     try:
         body = await req.json()
     except Exception:
-        # Return empty JSON-RPC response if request isn’t proper
+
         return {"jsonrpc": "2.0", "id": None, "error": {"message": "Invalid JSON"}}
 
     method = body.get("method")
     params = body.get("params") or {}
     rpc_id = body.get("id")
 
+    # Dynamic Webhook Variables
+
+    if method == "get_dynamic_variables":
+        cuisine = params.get("cuisine")
+        party_size = int(params.get("party_size", 1))
+        date = params.get("date")
+        time = params.get("time")
+
+        # Query DB for availability
+        results = search_availability({
+            "cuisine": cuisine,
+            "party_size": party_size,
+            "date": date,
+            "time": time
+        })
+
+        if results:
+            first = results[0]  
+            return {
+                "restaurant": first["restaurant"],
+                "available_seats": first["available_seats"],
+                "date": first["date"],
+                "time": first["time"]
+            }
+        else:
+            return {
+                "restaurant": None,
+                "available_seats": 0,
+                "date": date,
+                "time": time
+            }
+
+
+    # JSON-RPC Methods
+
     try:
         if method == "search_availability":
             result = search_availability(params)
         elif method == "create_reservation":
+            # Expect params: restaurant_id, availability_id, user_name, party_size, date, time
             result = create_reservation(params)
         elif method == "cancel_reservation":
+            # Expect param: reservation_id
             result = cancel_reservation(params)
         else:
             return {"jsonrpc": "2.0", "id": rpc_id, "error": {"message": "Unknown method"}}
 
         return {"jsonrpc": "2.0", "id": rpc_id, "result": result}
-    
+
     except Exception as e:
         return {"jsonrpc": "2.0", "id": rpc_id, "error": {"message": str(e)}}
+
