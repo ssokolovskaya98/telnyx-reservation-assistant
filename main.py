@@ -228,7 +228,7 @@ async def mcp_handler(request: Request):
 
         # === book_reservation ===
         elif method == "book_reservation":
-
+            
             result = await create_reservation(
                 params.get("restaurant_id"),
                 params.get("time"),
