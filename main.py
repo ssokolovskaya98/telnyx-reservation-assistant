@@ -145,13 +145,17 @@ def cancel_endpoint(params: dict):
 
 @app.post("/mcp")
 async def mcp_handler(request: Request):
-    VALID_API_KEY = os.getenv("X-API-KEY")
-    print("Loaded VALID_API_KEY:", VALID_API_KEY)
+    VALID_API_KEY = os.getenv("X-API-KEY")  # match exactly what you set in Render
+    print("🔑 Loaded VALID_API_KEY:", VALID_API_KEY)
 
     try:
-
+        
         # === API Key Validation ===
-        api_key = request.headers.get("X-API-KEY")  # Telnyx sends key in headers
+        api_key = None
+        auth_header = request.headers.get("authorization")
+
+        if auth_header and auth_header.lower().startswith("bearer "):
+            api_key = auth_header[7:]  # strip "Bearer 
 
         print("Incoming Headers:", dict(request.headers))
         print("Extracted API key:", api_key)
