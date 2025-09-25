@@ -153,7 +153,7 @@ async def mcp_handler(request: Request):
     try:
 
         # === API Key Validation ===
-        api_key = request.headers.get("x-api-key")  # Telnyx sends key in headers
+        api_key = request.headers.get("X-API-KEY")  # Telnyx sends key in headers
 
         print("Incoming Headers:", dict(request.headers))
         print("Extracted API key:", api_key)
@@ -239,7 +239,7 @@ async def mcp_handler(request: Request):
 
         # === check_availability ===
         elif method == "check_availability":
-            
+
             restaurant_id = params.get("restaurant_id")
             availability = await get_availability(restaurant_id)
             return JSONResponse(
