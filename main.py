@@ -145,7 +145,7 @@ def cancel_endpoint(params: dict):
 
 # Read API key from environment (Render or .env)
 VALID_API_KEY = os.getenv("x-api-key")
-print("🔑 Loaded VALID_API_KEY:", VALID_API_KEY)
+print("Loaded VALID_API_KEY:", VALID_API_KEY)
 
 
 @app.post("/mcp")
@@ -153,15 +153,14 @@ async def mcp_handler(request: Request):
     try:
 
         # === API Key Validation ===
-        api_key = request.query_params.get("api_key")  # ✅ Read from query params
+        api_key = request.headers.get("x-api-key")  # Telnyx sends key in headers
 
-        print("📥 Incoming Headers:", dict(request.headers))
-        print("🔍 Incoming query params:", dict(request.query_params))
-        print("🔍 Extracted API key:", api_key)
-        print("🔑 Loaded VALID_API_KEY:", VALID_API_KEY)
+        print("Incoming Headers:", dict(request.headers))
+        print("Extracted API key:", api_key)
+        print("Loaded VALID_API_KEY:", VALID_API_KEY)
 
         if api_key != VALID_API_KEY:
-            print("❌ API key mismatch!")
+            print("API key mismatch!")
             return JSONResponse(
                 {
                     "jsonrpc": "2.0",
@@ -177,7 +176,7 @@ async def mcp_handler(request: Request):
         request_id = payload.get("id")
         params = payload.get("params", {})
 
-        print(f"🛠 Handling method: {method}, id: {request_id}")
+        print(f"Handling method: {method}, id: {request_id}, params: {params}")
 
         # === Discovery: get_tools ===
         if method == "get_tools":
@@ -193,8 +192,13 @@ async def mcp_handler(request: Request):
                     "description": "Check open slots for a restaurant",
                     "input_schema": {
                         "type": "object",
-                        "properties": {"restaurant_id": {"type": "integer"}},
-                        "required": ["restaurant_id"],
+                        "properties": {
+                            "cuisine": {"type": "string"},
+                            "party_size": {"type": "integer"},
+                            "date": {"type": "string"},
+                            "time": {"type": "string"},
+                        },
+                        "required": ["party_size", "date", "time"],
                     },
                 },
                 {
@@ -204,15 +208,19 @@ async def mcp_handler(request: Request):
                         "type": "object",
                         "properties": {
                             "restaurant_id": {"type": "integer"},
-                            "time": {"type": "string"},
-                            "name": {"type": "string"},
+                            "availability_id": {"type": "integer"},
+                            "user_name": {"type": "string"},
                             "party_size": {"type": "integer"},
+                            "date": {"type": "string"},
+                            "time": {"type": "string"},
                         },
                         "required": [
                             "restaurant_id",
-                            "time",
-                            "name",
+                            "availability_id",
+                            "user_name",
                             "party_size",
+                            "date",
+                            "time",
                         ],
                     },
                 },
@@ -231,22 +239,46 @@ async def mcp_handler(request: Request):
 
         # === check_availability ===
         elif method == "check_availability":
-
+            
             restaurant_id = params.get("restaurant_id")
             availability = await get_availability(restaurant_id)
             return JSONResponse(
                 {"jsonrpc": "2.0", "id": request_id, "result": availability}
             )
 
+        # === dynamic_variables === Telnyx dynamic variable handler
+        elif method == "dynamic_variables":
+            cuisine = params.get("cuisine")
+            party_size = params.get("party_size")
+            date = params.get("date")
+            time = params.get("time")
+
+            print(f"🔍 Dynamic variables request: cuisine={cuisine}, party_size={party_size}, date={date}, time={time}")
+
+            availability = search_availability({
+                "cuisine": cuisine,
+                "party_size": party_size,
+                "date": date,
+                "time": time
+            })
+
+            choices = [
+                {
+                    "id": str(r["availability_id"]),
+                    "label": f"{r['restaurant']} ({r['cuisine']}, {r['city']}) — {r['available_seats']} seats at {r['time']}"
+                }
+                for r in availability
+            ]
+
+            return JSONResponse({
+                "jsonrpc": "2.0",
+                "id": request_id,
+                "result": choices
+            })
+
         # === book_reservation ===
         elif method == "book_reservation":
-
-            result = await create_reservation(
-                params.get("restaurant_id"),
-                params.get("time"),
-                params.get("name"),
-                params.get("party_size"),
-            )
+            result = create_reservation(params)
             return JSONResponse({"jsonrpc": "2.0", "id": request_id, "result": result})
 
         # === Unknown method ===
