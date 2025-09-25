@@ -3,6 +3,7 @@ from fastapi import FastAPI, HTTPException, Request
 import psycopg2
 import os
 from dotenv import load_dotenv
+from fastapi.responses import JSONResponse
 
 # Load env variables
 
@@ -142,44 +143,47 @@ def cancel_endpoint(params: dict):
 
 ###MCP Endpoint (for Telnyx)
 
-from fastapi import Request
-from fastapi.responses import JSONResponse
-
-app = FastAPI()
+# Read API key from environment (Render or .env)
+VALID_API_KEY = os.getenv("MCP_KEY")
 
 @app.post("/mcp")
 async def mcp_handler(request: Request):
     try:
-        # === 1. Handle Telnyx API Key ===
+        # === API Key Validation ===
         api_key = request.headers.get("x-api-key")
-        print("Telnyx x-api-key:", api_key)
-        # For demo, we don't validate it. But you could validate against your Integration Secret here if desired.
+        if api_key != VALID_API_KEY:
+            return JSONResponse(
+                {
+                    "jsonrpc": "2.0",
+                    "id": None,
+                    "error": {"code": 401, "message": "Unauthorized"},
+                },
+                status_code=401,
+            )
 
-        # === 2. Parse MCP Request ===
+        # === Parse MCP Request ===
         payload = await request.json()
         method = payload.get("method")
         request_id = payload.get("id")
         params = payload.get("params", {})
 
-        # === 3. Handle get_tools (Telnyx MCP discovery) ===
+        # === Discovery: get_tools ===
         if method == "get_tools":
 
             tools = [
                 {
                     "name": "list_restaurants",
                     "description": "Get all restaurants in the directory",
-                    "input_schema": {"type": "object", "properties": {}}
+                    "input_schema": {"type": "object", "properties": {}},
                 },
                 {
                     "name": "check_availability",
                     "description": "Check open slots for a restaurant",
                     "input_schema": {
                         "type": "object",
-                        "properties": {
-                            "restaurant_id": {"type": "integer"}
-                        },
-                        "required": ["restaurant_id"]
-                    }
+                        "properties": {"restaurant_id": {"type": "integer"}},
+                        "required": ["restaurant_id"],
+                    },
                 },
                 {
                     "name": "book_reservation",
@@ -190,67 +194,64 @@ async def mcp_handler(request: Request):
                             "restaurant_id": {"type": "integer"},
                             "time": {"type": "string"},
                             "name": {"type": "string"},
-                            "party_size": {"type": "integer"}
+                            "party_size": {"type": "integer"},
                         },
-                        "required": ["restaurant_id", "time", "name", "party_size"]
-                    }
-                }
+                        "required": [
+                            "restaurant_id",
+                            "time",
+                            "name",
+                            "party_size",
+                        ],
+                    },
+                },
             ]
-            return JSONResponse({
-                "jsonrpc": "2.0",
-                "id": request_id,
-                "result": {"tools": tools}
-            })
+            return JSONResponse(
+                {"jsonrpc": "2.0", "id": request_id, "result": {"tools": tools}}
+            )
 
-        # === 4. Handle list_restaurants ===
+        # === list_restaurants ===
         elif method == "list_restaurants":
 
             restaurants = await get_all_restaurants()
-            return JSONResponse({
-                "jsonrpc": "2.0",
-                "id": request_id,
-                "result": restaurants
-            })
+            return JSONResponse(
+                {"jsonrpc": "2.0", "id": request_id, "result": restaurants}
+            )
 
-        # === 5. Handle check_availability ===
+        # === check_availability ===
         elif method == "check_availability":
 
             restaurant_id = params.get("restaurant_id")
             availability = await get_availability(restaurant_id)
-            return JSONResponse({
-                "jsonrpc": "2.0",
-                "id": request_id,
-                "result": availability
-            })
+            return JSONResponse(
+                {"jsonrpc": "2.0", "id": request_id, "result": availability}
+            )
 
-        # === 6. Handle book_reservation ===
+        # === book_reservation ===
         elif method == "book_reservation":
 
             result = await create_reservation(
                 params.get("restaurant_id"),
                 params.get("time"),
                 params.get("name"),
-                params.get("party_size")
+                params.get("party_size"),
             )
-            return JSONResponse({
-                "jsonrpc": "2.0",
-                "id": request_id,
-                "result": result
-            })
+            return JSONResponse({"jsonrpc": "2.0", "id": request_id, "result": result})
 
-        # === 7. Unknown method ===
+        # === Unknown method ===
         else:
-            return JSONResponse({
-                "jsonrpc": "2.0",
-                "id": request_id,
-                "error": {"code": -32601, "message": f"Unknown method {method}"}
-            })
+            return JSONResponse(
+                {
+                    "jsonrpc": "2.0",
+                    "id": request_id,
+                    "error": {"code": -32601, "message": f"Unknown method {method}"},
+                }
+            )
 
     except Exception as e:
-        return JSONResponse({
-            "jsonrpc": "2.0",
-            "id": None,
-            "error": {"code": -32000, "message": str(e)}
-        })
-    
-    
+        return JSONResponse(
+            {
+                "jsonrpc": "2.0",
+                "id": None,
+                "error": {"code": -32000, "message": str(e)},
+            }
+        )
