@@ -144,7 +144,7 @@ def cancel_endpoint(params: dict):
 # === MCP Endpoint (for Telnyx) ===
 
 # Read API key from environment (Render or .env)
-VALID_API_KEY = os.getenv("MCP_KEY")
+VALID_API_KEY = os.getenv("X_API_KEY")
 print("🔑 Loaded VALID_API_KEY:", VALID_API_KEY)
 
 
@@ -180,7 +180,7 @@ async def mcp_handler(request: Request):
 
         # === Discovery: get_tools ===
         if method == "get_tools":
-            
+
             tools = [
                 {
                     "name": "list_restaurants",
