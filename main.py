@@ -144,7 +144,7 @@ def cancel_endpoint(params: dict):
 # === MCP Endpoint (for Telnyx) ===
 
 # Read API key from environment (Render or .env)
-VALID_API_KEY = os.getenv("X_API_KEY")
+VALID_API_KEY = os.getenv("x-api-key")
 print("🔑 Loaded VALID_API_KEY:", VALID_API_KEY)
 
 
