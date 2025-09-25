@@ -145,7 +145,7 @@ def cancel_endpoint(params: dict):
 
 @app.post("/mcp")
 async def mcp_handler(request: Request):
-    VALID_API_KEY = os.getenv("x-api-key")
+    VALID_API_KEY = os.getenv("X-API-KEY")
     print("Loaded VALID_API_KEY:", VALID_API_KEY)
 
     try:
