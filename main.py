@@ -141,15 +141,13 @@ def reserve_endpoint(params: dict):
 def cancel_endpoint(params: dict):
     return cancel_reservation(params)
 
-# === MCP Endpoint (for Telnyx) ===
-
-# Read API key from environment (Render or .env)
-VALID_API_KEY = os.getenv("x-api-key")
-print("Loaded VALID_API_KEY:", VALID_API_KEY)
-
+# === MCP Endpoint (for Telnyx) ==
 
 @app.post("/mcp")
 async def mcp_handler(request: Request):
+    VALID_API_KEY = os.getenv("x-api-key")
+    print("Loaded VALID_API_KEY:", VALID_API_KEY)
+
     try:
 
         # === API Key Validation ===
