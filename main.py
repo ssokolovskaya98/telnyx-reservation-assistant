@@ -143,42 +143,197 @@ def cancel_endpoint(params: dict):
 
 # === MCP Endpoint (for Telnyx) ==
 
+# @app.post("/mcp")
+# async def mcp_handler(request: Request):
+#     VALID_API_KEY = os.getenv("X-API-KEY")  # match exactly what you set in Render
+#     print("🔑 Loaded VALID_API_KEY:", VALID_API_KEY)
+
+#     try:
+
+#         # === API Key Validation ===
+#         api_key = None
+#         auth_header = request.headers.get("authorization")
+
+#         if auth_header and auth_header.lower().startswith("bearer "):
+#             api_key = auth_header[7:]  # strip "Bearer 
+
+#         print("Incoming Headers:", dict(request.headers))
+#         print("Extracted API key:", api_key)
+#         print("Loaded VALID_API_KEY:", VALID_API_KEY)
+
+#         if api_key != VALID_API_KEY:
+#             print("API key mismatch!")
+#             return JSONResponse(
+#                 {
+#                     "jsonrpc": "2.0",
+#                     "id": None,
+#                     "error": {"code": 401, "message": "Unauthorized"},
+#                 },
+#                 status_code=401,
+#             )
+
+#         # === Parse MCP Request ===
+#         payload = await request.json()
+#         method = payload.get("method")
+#         request_id = payload.get("id")
+#         params = payload.get("params", {})
+
+#         print(f"Handling method: {method}, id: {request_id}, params: {params}")
+
+#         # === Discovery: get_tools ===
+#         if method == "get_tools":
+
+#             tools = [
+#                 {
+#                     "name": "list_restaurants",
+#                     "description": "Get all restaurants in the directory",
+#                     "input_schema": {"type": "object", "properties": {}},
+#                 },
+#                 {
+#                     "name": "check_availability",
+#                     "description": "Check open slots for a restaurant",
+#                     "input_schema": {
+#                         "type": "object",
+#                         "properties": {
+#                             "cuisine": {"type": "string"},
+#                             "party_size": {"type": "integer"},
+#                             "date": {"type": "string"},
+#                             "time": {"type": "string"},
+#                         },
+#                         "required": ["party_size", "date", "time"],
+#                     },
+#                 },
+#                 {
+#                     "name": "book_reservation",
+#                     "description": "Book a reservation at a restaurant",
+#                     "input_schema": {
+#                         "type": "object",
+#                         "properties": {
+#                             "restaurant_id": {"type": "integer"},
+#                             "availability_id": {"type": "integer"},
+#                             "user_name": {"type": "string"},
+#                             "party_size": {"type": "integer"},
+#                             "date": {"type": "string"},
+#                             "time": {"type": "string"},
+#                         },
+#                         "required": [
+#                             "restaurant_id",
+#                             "availability_id",
+#                             "user_name",
+#                             "party_size",
+#                             "date",
+#                             "time",
+#                         ],
+#                     },
+#                 },
+#             ]
+#             return JSONResponse(
+#                 {"jsonrpc": "2.0", "id": request_id, "result": {"tools": tools}}
+#             )
+
+#         # === list_restaurants ===
+#         elif method == "list_restaurants":
+
+#             restaurants = await get_all_restaurants()
+#             return JSONResponse(
+#                 {"jsonrpc": "2.0", "id": request_id, "result": restaurants}
+#             )
+
+#         # === check_availability ===
+#         elif method == "check_availability":
+
+#             restaurant_id = params.get("restaurant_id")
+#             availability = await get_availability(restaurant_id)
+#             return JSONResponse(
+#                 {"jsonrpc": "2.0", "id": request_id, "result": availability}
+#             )
+
+#         # === dynamic_variables === Telnyx dynamic variable handler
+#         elif method == "dynamic_variables":
+#             cuisine = params.get("cuisine")
+#             party_size = params.get("party_size")
+#             date = params.get("date")
+#             time = params.get("time")
+
+#             print(f"🔍 Dynamic variables request: cuisine={cuisine}, party_size={party_size}, date={date}, time={time}")
+
+#             availability = search_availability({
+#                 "cuisine": cuisine,
+#                 "party_size": party_size,
+#                 "date": date,
+#                 "time": time
+#             })
+
+#             choices = [
+#                 {
+#                     "id": str(r["availability_id"]),
+#                     "label": f"{r['restaurant']} ({r['cuisine']}, {r['city']}) — {r['available_seats']} seats at {r['time']}"
+#                 }
+#                 for r in availability
+#             ]
+
+#             return JSONResponse({
+#                 "jsonrpc": "2.0",
+#                 "id": request_id,
+#                 "result": choices
+#             })
+
+#         # === book_reservation ===
+#         elif method == "book_reservation":
+#             result = create_reservation(params)
+#             return JSONResponse({"jsonrpc": "2.0", "id": request_id, "result": result})
+
+#         # === Unknown method ===
+#         else:
+#             return JSONResponse(
+#                 {
+#                     "jsonrpc": "2.0",
+#                     "id": request_id,
+#                     "error": {"code": -32601, "message": f"Unknown method {method}"},
+#                 }
+#             )
+
+#     except Exception as e:
+#         print("⚠️ Exception:", str(e))
+#         return JSONResponse(
+#             {
+#                 "jsonrpc": "2.0",
+#                 "id": None,
+#                 "error": {"code": -32000, "message": str(e)},
+#             }
+#         )
+
 @app.post("/mcp")
 async def mcp_handler(request: Request):
-    VALID_API_KEY = os.getenv("X-API-KEY")  # match exactly what you set in Render
-    print("🔑 Loaded VALID_API_KEY:", VALID_API_KEY)
+    VALID_API_KEY = os.getenv("X-API-KEY")
+    print("Loaded VALID_API_KEY:", VALID_API_KEY)
 
     try:
-        
-        # === API Key Validation ===
-        api_key = None
-        auth_header = request.headers.get("authorization")
-
-        if auth_header and auth_header.lower().startswith("bearer "):
-            api_key = auth_header[7:]  # strip "Bearer 
-
+        # === Extract API key from headers ===
+        api_key = request.headers.get("x-api-key")
         print("Incoming Headers:", dict(request.headers))
         print("Extracted API key:", api_key)
-        print("Loaded VALID_API_KEY:", VALID_API_KEY)
-
-        if api_key != VALID_API_KEY:
-            print("API key mismatch!")
-            return JSONResponse(
-                {
-                    "jsonrpc": "2.0",
-                    "id": None,
-                    "error": {"code": 401, "message": "Unauthorized"},
-                },
-                status_code=401,
-            )
-
+        
         # === Parse MCP Request ===
         payload = await request.json()
         method = payload.get("method")
         request_id = payload.get("id")
         params = payload.get("params", {})
 
-        print(f"Handling method: {method}, id: {request_id}, params: {params}")
+        print(f"🛠 Handling method: {method}, id: {request_id}")
+
+        # Skip validation for MCP handshake
+        if method != "initialize":
+            if api_key != VALID_API_KEY:
+                print("API key mismatch!")
+                return JSONResponse(
+                    {
+                        "jsonrpc": "2.0",
+                        "id": request_id,
+                        "error": {"code": 401, "message": "Unauthorized"},
+                    },
+                    status_code=401,
+                )
 
         # === Discovery: get_tools ===
         if method == "get_tools":
@@ -194,13 +349,8 @@ async def mcp_handler(request: Request):
                     "description": "Check open slots for a restaurant",
                     "input_schema": {
                         "type": "object",
-                        "properties": {
-                            "cuisine": {"type": "string"},
-                            "party_size": {"type": "integer"},
-                            "date": {"type": "string"},
-                            "time": {"type": "string"},
-                        },
-                        "required": ["party_size", "date", "time"],
+                        "properties": {"restaurant_id": {"type": "integer"}},
+                        "required": ["restaurant_id"],
                     },
                 },
                 {
@@ -211,7 +361,7 @@ async def mcp_handler(request: Request):
                         "properties": {
                             "restaurant_id": {"type": "integer"},
                             "availability_id": {"type": "integer"},
-                            "user_name": {"type": "string"},
+                            "name": {"type": "string"},
                             "party_size": {"type": "integer"},
                             "date": {"type": "string"},
                             "time": {"type": "string"},
@@ -219,7 +369,7 @@ async def mcp_handler(request: Request):
                         "required": [
                             "restaurant_id",
                             "availability_id",
-                            "user_name",
+                            "name",
                             "party_size",
                             "date",
                             "time",
@@ -233,55 +383,26 @@ async def mcp_handler(request: Request):
 
         # === list_restaurants ===
         elif method == "list_restaurants":
-
-            restaurants = await get_all_restaurants()
+            restaurants = search_availability({"cuisine": None, "party_size": 1, "date": None, "time": None})
             return JSONResponse(
                 {"jsonrpc": "2.0", "id": request_id, "result": restaurants}
             )
 
         # === check_availability ===
         elif method == "check_availability":
-
-            restaurant_id = params.get("restaurant_id")
-            availability = await get_availability(restaurant_id)
+            availability = search_availability(params)
             return JSONResponse(
                 {"jsonrpc": "2.0", "id": request_id, "result": availability}
             )
-
-        # === dynamic_variables === Telnyx dynamic variable handler
-        elif method == "dynamic_variables":
-            cuisine = params.get("cuisine")
-            party_size = params.get("party_size")
-            date = params.get("date")
-            time = params.get("time")
-
-            print(f"🔍 Dynamic variables request: cuisine={cuisine}, party_size={party_size}, date={date}, time={time}")
-
-            availability = search_availability({
-                "cuisine": cuisine,
-                "party_size": party_size,
-                "date": date,
-                "time": time
-            })
-
-            choices = [
-                {
-                    "id": str(r["availability_id"]),
-                    "label": f"{r['restaurant']} ({r['cuisine']}, {r['city']}) — {r['available_seats']} seats at {r['time']}"
-                }
-                for r in availability
-            ]
-
-            return JSONResponse({
-                "jsonrpc": "2.0",
-                "id": request_id,
-                "result": choices
-            })
-
+        
         # === book_reservation ===
         elif method == "book_reservation":
             result = create_reservation(params)
             return JSONResponse({"jsonrpc": "2.0", "id": request_id, "result": result})
+
+        # === initialize handshake ===
+        elif method == "initialize":
+            return JSONResponse({"jsonrpc": "2.0", "id": request_id, "result": {}})
 
         # === Unknown method ===
         else:
@@ -302,3 +423,4 @@ async def mcp_handler(request: Request):
                 "error": {"code": -32000, "message": str(e)},
             }
         )
+
