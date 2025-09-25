@@ -151,17 +151,12 @@ print("🔑 Loaded VALID_API_KEY:", VALID_API_KEY)
 @app.post("/mcp")
 async def mcp_handler(request: Request):
     try:
-        
+
         # === API Key Validation ===
-        api_key = None
-        auth_header = request.headers.get("authorization")
+        api_key = request.query_params.get("api_key")  # ✅ Read from query params
 
         print("📥 Incoming Headers:", dict(request.headers))
-        print("🔍 Incoming authorization header:", auth_header)
-
-        if auth_header and auth_header.lower().startswith("bearer "):
-            api_key = auth_header.split(" ")[1]
-
+        print("🔍 Incoming query params:", dict(request.query_params))
         print("🔍 Extracted API key:", api_key)
         print("🔑 Loaded VALID_API_KEY:", VALID_API_KEY)
 
