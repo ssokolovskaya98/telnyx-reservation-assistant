@@ -141,17 +141,26 @@ def reserve_endpoint(params: dict):
 def cancel_endpoint(params: dict):
     return cancel_reservation(params)
 
-###MCP Endpoint (for Telnyx)
+# === MCP Endpoint (for Telnyx) ===
 
 # Read API key from environment (Render or .env)
 VALID_API_KEY = os.getenv("MCP_KEY")
+print("🔑 Loaded VALID_API_KEY:", VALID_API_KEY)
+
 
 @app.post("/mcp")
 async def mcp_handler(request: Request):
     try:
+        # === Debug: print incoming headers ===
+        headers_dict = dict(request.headers)
+        print("📥 Incoming Headers:", headers_dict)
+
         # === API Key Validation ===
         api_key = request.headers.get("x-api-key")
+        print("🔍 Incoming x-api-key:", api_key)
+
         if api_key != VALID_API_KEY:
+            print("❌ API key mismatch!")
             return JSONResponse(
                 {
                     "jsonrpc": "2.0",
@@ -167,9 +176,11 @@ async def mcp_handler(request: Request):
         request_id = payload.get("id")
         params = payload.get("params", {})
 
+        print(f"🛠 Handling method: {method}, id: {request_id}")
+
         # === Discovery: get_tools ===
         if method == "get_tools":
-
+            
             tools = [
                 {
                     "name": "list_restaurants",
@@ -228,7 +239,7 @@ async def mcp_handler(request: Request):
 
         # === book_reservation ===
         elif method == "book_reservation":
-            
+
             result = await create_reservation(
                 params.get("restaurant_id"),
                 params.get("time"),
@@ -248,6 +259,7 @@ async def mcp_handler(request: Request):
             )
 
     except Exception as e:
+        print("⚠️ Exception:", str(e))
         return JSONResponse(
             {
                 "jsonrpc": "2.0",
