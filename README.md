@@ -20,22 +20,22 @@ This project demonstrates how to integrate conversational AI with real-time APIs
 
 ## Architecture Overview
 
-*Database: PostgreSQL on Render with three core tables:
+#### **Database** (PostgreSQL on Render)  with three core tables:
 
-  1.restaurants – restaurant info
-  2. availability – date/time slots
-  3. reservations – customer bookings
+1. restaurants – restaurant info
+2. availability – date/time slots
+3. reservations – customer bookings
 
-*Backend (FastAPI):
+#### **Backend** (FastAPI)  
 
-  *Exposes REST APIs for availability, booking, and cancellation
-  *Implements an MCP server for Telnyx Assistant integration
+- Exposes REST APIs for availability, booking, and cancellation
+- Implements an MCP server for Telnyx Assistant integration
 
-*Telnyx Assistant:
+#### **Telnyx Assistant**
 
-  *Connected to MCP server via webhook
-  *Configured with dynamic variables, instructions, and a chosen voice
-  *Linked to a purchased phone number for real world calling
+- Connected to MCP server via webhook
+- Configured with dynamic variables, instructions, and a chosen voice
+- Linked to a purchased phone number for real world calling
 
 ---
 
