@@ -172,12 +172,6 @@ uvicorn main:app --reload
 
 ---
 
-## Backend Architecture
-
-WILL ADD IN
-
----
-
 ## Future Improvements
 
 - Integrate with real restaurant APIs (e.g., Yelp, OpenTable).
