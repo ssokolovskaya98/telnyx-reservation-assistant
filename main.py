@@ -145,32 +145,34 @@ def cancel_endpoint(params: dict):
 
 @app.post("/mcp")
 async def mcp_handler(request: Request):
-    VALID_API_KEY = os.getenv("X-API-KEY")  # match exactly what you set in Render
-    print("🔑 Loaded VALID_API_KEY:", VALID_API_KEY)
+    # VALID_API_KEY = os.getenv("X-API-KEY")  # match exactly what you set in Render
+    # print("🔑 Loaded VALID_API_KEY:", VALID_API_KEY)
 
     try:
-
-        # === API Key Validation ===
-        api_key = None
-        auth_header = request.headers.get("authorization")
-
-        if auth_header and auth_header.lower().startswith("bearer "):
-            api_key = auth_header[7:]  # strip "Bearer 
-
+        
         print("Incoming Headers:", dict(request.headers))
-        print("Extracted API key:", api_key)
-        print("Loaded VALID_API_KEY:", VALID_API_KEY)
 
-        if api_key != VALID_API_KEY:
-            print("API key mismatch!")
-            return JSONResponse(
-                {
-                    "jsonrpc": "2.0",
-                    "id": None,
-                    "error": {"code": 401, "message": "Unauthorized"},
-                },
-                status_code=401,
-            )
+        # # === API Key Validation ===
+        # api_key = None
+        # auth_header = request.headers.get("authorization")
+
+        # if auth_header and auth_header.lower().startswith("bearer "):
+        #     api_key = auth_header[7:]  # strip "Bearer 
+
+        # print("Incoming Headers:", dict(request.headers))
+        # print("Extracted API key:", api_key)
+        # print("Loaded VALID_API_KEY:", VALID_API_KEY)
+
+        # if api_key != VALID_API_KEY:
+        #     print("API key mismatch!")
+        #     return JSONResponse(
+        #         {
+        #             "jsonrpc": "2.0",
+        #             "id": None,
+        #             "error": {"code": 401, "message": "Unauthorized"},
+        #         },
+        #         status_code=401,
+        #     )
 
         # === Parse MCP Request ===
         payload = await request.json()
