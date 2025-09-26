@@ -132,7 +132,7 @@ uvicorn main:app --reload
 
 3. Set environment variables (DB_NAME, DB_USER, etc) in the Render dashboard.
 
-4. Deploy and confirm your app is live at https://<your-service>.onrender.com/mcp.
+4. Deploy and confirm your app is live at https://YOUR-APP.onrender.com/mcp.
 
 ### Telnyx AI Assistant Setup
 
