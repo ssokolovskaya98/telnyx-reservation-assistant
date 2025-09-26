@@ -37,6 +37,8 @@ This project demonstrates how to integrate conversational AI with real-time APIs
   *Configured with dynamic variables, instructions, and a chosen voice
   *Linked to a purchased phone number for real world calling
 
+---
+
 ## Setup Instructions (Try it Yourself)
 
 ### Database Setup
@@ -145,6 +147,8 @@ uvicorn main:app --reload
 
 3. Call the number and test booking, checking availability, and cancellations.
 
+---
+
 ## Demo Flow
 
 1. User calls the Assistant’s number.
@@ -152,6 +156,8 @@ uvicorn main:app --reload
 3. User provides details (i.e. cuisine type, preferred time, party size)
 4. If available, reservation is created; if not, alternatives are offered.
 5. User can also cancel a reservation by providing their name and time.
+
+---
 
 ## End to End Development Flow
 
@@ -170,12 +176,16 @@ uvicorn main:app --reload
 
 WILL ADD IN
 
+---
+
 ## Future Improvements
 
 - Integrate with real restaurant APIs (e.g., Yelp, OpenTable).
 - Expand to more cities and cuisines.
 - Add SMS confirmations with Telnyx Messaging API.
 - Consider other user wants/needs: Parking? Closet public transportation stop? Cancellation fees? Location/Neighborhood of restaurant?
+
+---
 
 ## Developer
 
