@@ -1,306 +1,318 @@
-#main.py
-from fastapi import FastAPI, HTTPException, Request
-import psycopg2
-import os
-from dotenv import load_dotenv
-from fastapi.responses import JSONResponse
+# #imports
+# from fastapi import FastAPI, HTTPException, Request
+# import psycopg2
+# import os
+# from dotenv import load_dotenv
+# from fastapi.responses import JSONResponse
 
-# Load env variables
+# # Load env variables
 
-load_dotenv(".env")
+# load_dotenv(".env")
 
-def get_conn():
-    return psycopg2.connect(
-        dbname=os.getenv("DB_NAME"),
-        user=os.getenv("DB_USER"),
-        password=os.getenv("DB_PASSWORD"),
-        host=os.getenv("DB_HOST"),
-        port=os.getenv("DB_PORT")
-    )
+# #DB Connection
 
-app = FastAPI()
+# def get_conn():
+#     return psycopg2.connect(
+#         dbname=os.getenv("DB_NAME"),
+#         user=os.getenv("DB_USER"),
+#         password=os.getenv("DB_PASSWORD"),
+#         host=os.getenv("DB_HOST"),
+#         port=os.getenv("DB_PORT")
+#     )
 
-@app.get("/health")
-def health():
-    return {"status": "ok"}
+# #Initialize FastAPI
 
+# app = FastAPI()
 
-def search_availability(params: dict):
-    """Find available restaurants by cuisine, date, time, and party size."""
-    cuisine = params.get("cuisine")
-    party_size = params.get("party_size")
-    date = params.get("date")   # format: '2025-09-24'
-    time = params.get("time")   # format: '19:00:00'
-
-    query = """
-        SELECT a.availability_id,
-               r.restaurant_id,
-               r.restaurant,
-               r.city,
-               r.cuisine,
-               r.price,
-               a.date,
-               a.time,
-               a.available_seats
-        FROM availability a
-        JOIN restaurants r ON a.restaurant_id = r.restaurant_id
-        WHERE (%s IS NULL OR r.cuisine ILIKE %s)
-          AND a.available_seats >= %s
-          AND a.date = %s
-          AND a.time = %s
-    """
-
-    with get_conn() as conn:
-        with conn.cursor() as cur:
-            cur.execute(query, (cuisine, cuisine, party_size, date, time))
-            rows = cur.fetchall()
-            cols = [desc[0] for desc in cur.description]
-
-    return [dict(zip(cols, row)) for row in rows]
-
-def create_reservation(params: dict):
-    """Book a reservation and decrement available seats."""
-    restaurant_id = params["restaurant_id"]
-    availability_id = params["availability_id"]
-    user_name = params["user_name"]
-    party_size = params["party_size"]
-    date = params["date"]
-    time = params["time"]
-
-    with get_conn() as conn:
-        with conn.cursor() as cur:
-
-            # Check availability
-            cur.execute("SELECT available_seats FROM availability WHERE availability_id=%s FOR UPDATE", (availability_id,))
-            avail = cur.fetchone()
-            if not avail or avail[0] < party_size:
-                raise HTTPException(status_code=400, detail="Not enough seats available")
-
-            # Insert reservation
-            cur.execute(
-                """
-                INSERT INTO reservations (restaurant_id, user_name, reservation_date, reservation_time, party_size)
-                VALUES (%s, %s, %s, %s, %s)
-                RETURNING reservation_id
-                """,
-                (restaurant_id, user_name, date, time, party_size)
-            )
-            reservation_id = cur.fetchone()[0]
-
-            # Update availability
-            cur.execute(
-                "UPDATE availability SET available_seats = available_seats - %s WHERE availability_id=%s",
-                (party_size, availability_id)
-            )
-
-    return {"reservation_id": reservation_id, "message": "Reservation confirmed!"}
-
-def cancel_reservation(params: dict):
-    """Cancel a reservation and restore available seats."""
-    reservation_id = params["reservation_id"]
-
-    with get_conn() as conn:
-        with conn.cursor() as cur:
-
-            # Look up reservation
-            cur.execute("SELECT * FROM reservations WHERE reservation_id=%s FOR UPDATE", (reservation_id,))
-            res = cur.fetchone()
-            if not res:
-                raise HTTPException(status_code=404, detail="Reservation not found")
-
-            colnames = [desc[0] for desc in cur.description]
-            rowdict = dict(zip(colnames, res))
-
-            # Delete the reservation (since your schema has no status column)
-            cur.execute("DELETE FROM reservations WHERE reservation_id=%s", (reservation_id,))
-
-            # Restore seats in availability
-            cur.execute(
-                """
-                UPDATE availability
-                SET available_seats = available_seats + %s
-                WHERE restaurant_id=%s AND date=%s AND time=%s
-                """,
-                (rowdict["party_size"], rowdict["restaurant_id"], rowdict["reservation_date"], rowdict["reservation_time"])
-            )
-
-    return {"message": "Reservation cancelled"}
+# @app.get("/health")
+# def health():
+#     return {"status": "ok"}
 
 
-# REST Endpoints (testing)
+# #I defined 3 functions for searching avaialbility, creating reservations, and cancelling 
 
-@app.post("/search")
-def search_endpoint(params: dict):
-    return search_availability(params)
+# def search_availability(params: dict):
+#     """Find available restaurants by cuisine, date, time, and party size."""
+#     cuisine = params.get("cuisine")
+#     party_size = params.get("party_size")
+#     date = params.get("date")
+#     time = params.get("time") 
 
-@app.post("/reserve")
-def reserve_endpoint(params: dict):
-    return create_reservation(params)
+#     query = """
+#         SELECT a.availability_id,
+#                r.restaurant_id,
+#                r.restaurant,
+#                r.city,
+#                r.cuisine,
+#                r.price,
+#                a.date,
+#                a.time,
+#                a.available_seats
+#         FROM availability a
+#         JOIN restaurants r ON a.restaurant_id = r.restaurant_id
+#         WHERE (%s IS NULL OR r.cuisine ILIKE %s)
+#           AND a.available_seats >= %s
+#           AND a.date = %s
+#           AND a.time = %s
+#     """
 
-@app.post("/cancel")
-def cancel_endpoint(params: dict):
-    return cancel_reservation(params)
+#     with get_conn() as conn:
+#         with conn.cursor() as cur:
+#             cur.execute(query, (cuisine, cuisine, party_size, date, time))
+#             rows = cur.fetchall()
+#             cols = [desc[0] for desc in cur.description]
 
-#=== MCP Endpoint (for Telnyx) ==
+#     return [dict(zip(cols, row)) for row in rows]
 
-@app.post("/mcp")
-async def mcp_handler(request: Request):
-    # VALID_API_KEY = os.getenv("X-API-KEY")  # match exactly what you set in Render
-    # print("🔑 Loaded VALID_API_KEY:", VALID_API_KEY)
+# def create_reservation(params: dict):
+#     """Book a reservation and decrement available seats."""
+#     restaurant_id = params["restaurant_id"]
+#     availability_id = params["availability_id"]
+#     user_name = params["user_name"]
+#     party_size = params["party_size"]
+#     date = params["date"]
+#     time = params["time"]
 
-    try:
-        
-        print("Incoming Headers:", dict(request.headers))
+#     with get_conn() as conn:
+#         with conn.cursor() as cur:
 
-        # # === API Key Validation ===
-        # api_key = None
-        # auth_header = request.headers.get("authorization")
+#             # Check availability
+#             cur.execute("SELECT available_seats FROM availability WHERE availability_id=%s FOR UPDATE", (availability_id,))
+#             avail = cur.fetchone()
+#             if not avail or avail[0] < party_size:
+#                 raise HTTPException(status_code=400, detail="Not enough seats available")
 
-        # if auth_header and auth_header.lower().startswith("bearer "):
-        #     api_key = auth_header[7:]  # strip "Bearer 
+#             # Insert reservation
+#             cur.execute(
+#                 """
+#                 INSERT INTO reservations (restaurant_id, user_name, reservation_date, reservation_time, party_size)
+#                 VALUES (%s, %s, %s, %s, %s)
+#                 RETURNING reservation_id
+#                 """,
+#                 (restaurant_id, user_name, date, time, party_size)
+#             )
+#             reservation_id = cur.fetchone()[0]
 
-        # print("Incoming Headers:", dict(request.headers))
-        # print("Extracted API key:", api_key)
-        # print("Loaded VALID_API_KEY:", VALID_API_KEY)
+#             # Update availability
+#             cur.execute(
+#                 "UPDATE availability SET available_seats = available_seats - %s WHERE availability_id=%s",
+#                 (party_size, availability_id)
+#             )
 
-        # if api_key != VALID_API_KEY:
-        #     print("API key mismatch!")
-        #     return JSONResponse(
-        #         {
-        #             "jsonrpc": "2.0",
-        #             "id": None,
-        #             "error": {"code": 401, "message": "Unauthorized"},
-        #         },
-        #         status_code=401,
-        #     )
+#     return {"reservation_id": reservation_id, "message": "Reservation confirmed!"}
 
-        # === Parse MCP Request ===
-        payload = await request.json()
-        method = payload.get("method")
-        request_id = payload.get("id")
-        params = payload.get("params", {})
+# def cancel_reservation(params: dict):
+#     """Cancel a reservation and restore available seats."""
+#     reservation_id = params["reservation_id"]
 
-        print(f"Handling method: {method}, id: {request_id}, params: {params}")
+#     with get_conn() as conn:
+#         with conn.cursor() as cur:
 
-        # === Discovery: get_tools ===
-        if method == "get_tools":
+#             # Look up reservation
+#             cur.execute("SELECT * FROM reservations WHERE reservation_id=%s FOR UPDATE", (reservation_id,))
+#             res = cur.fetchone()
+#             if not res:
+#                 raise HTTPException(status_code=404, detail="Reservation not found")
 
-            tools = [
-                {
-                    "name": "list_restaurants",
-                    "description": "Get all restaurants in the directory",
-                    "input_schema": {"type": "object", "properties": {}},
-                },
-                {
-                    "name": "check_availability",
-                    "description": "Check open slots for a restaurant",
-                    "input_schema": {
-                        "type": "object",
-                        "properties": {
-                            "cuisine": {"type": "string"},
-                            "party_size": {"type": "integer"},
-                            "date": {"type": "string"},
-                            "time": {"type": "string"},
-                        },
-                        "required": ["party_size", "date", "time"],
-                    },
-                },
-                {
-                    "name": "book_reservation",
-                    "description": "Book a reservation at a restaurant",
-                    "input_schema": {
-                        "type": "object",
-                        "properties": {
-                            "restaurant_id": {"type": "integer"},
-                            "availability_id": {"type": "integer"},
-                            "user_name": {"type": "string"},
-                            "party_size": {"type": "integer"},
-                            "date": {"type": "string"},
-                            "time": {"type": "string"},
-                        },
-                        "required": [
-                            "restaurant_id",
-                            "availability_id",
-                            "user_name",
-                            "party_size",
-                            "date",
-                            "time",
-                        ],
-                    },
-                },
-            ]
-            return JSONResponse(
-                {"jsonrpc": "2.0", "id": request_id, "result": {"tools": tools}}
-            )
+#             colnames = [desc[0] for desc in cur.description]
+#             rowdict = dict(zip(colnames, res))
 
-        # === list_restaurants ===
-        elif method == "list_restaurants":
+#             # Delete the reservation
+#             cur.execute("DELETE FROM reservations WHERE reservation_id=%s", (reservation_id,))
 
-            restaurants = await get_all_restaurants()
-            return JSONResponse(
-                {"jsonrpc": "2.0", "id": request_id, "result": restaurants}
-            )
+#             # Restore seats in availability
+#             cur.execute(
+#                 """
+#                 UPDATE availability
+#                 SET available_seats = available_seats + %s
+#                 WHERE restaurant_id=%s AND date=%s AND time=%s
+#                 """,
+#                 (rowdict["party_size"], rowdict["restaurant_id"], rowdict["reservation_date"], rowdict["reservation_time"])
+#             )
 
-        # === check_availability ===
-        elif method == "check_availability":
+#     return {"message": "Reservation cancelled"}
 
-            restaurant_id = params.get("restaurant_id")
-            availability = await get_availability(restaurant_id)
-            return JSONResponse(
-                {"jsonrpc": "2.0", "id": request_id, "result": availability}
-            )
 
-        # === dynamic_variables === Telnyx dynamic variable handler
-        elif method == "dynamic_variables":
-            cuisine = params.get("cuisine")
-            party_size = params.get("party_size")
-            date = params.get("date")
-            time = params.get("time")
+# # REST Endpoints
 
-            print(f"🔍 Dynamic variables request: cuisine={cuisine}, party_size={party_size}, date={date}, time={time}")
+# @app.post("/search")
+# def search_endpoint(params: dict):
+#     return search_availability(params)
 
-            availability = search_availability({
-                "cuisine": cuisine,
-                "party_size": party_size,
-                "date": date,
-                "time": time
-            })
+# @app.post("/reserve")
+# def reserve_endpoint(params: dict):
+#     return create_reservation(params)
 
-            choices = [
-                {
-                    "id": str(r["availability_id"]),
-                    "label": f"{r['restaurant']} ({r['cuisine']}, {r['city']}) — {r['available_seats']} seats at {r['time']}"
-                }
-                for r in availability
-            ]
+# @app.post("/cancel")
+# def cancel_endpoint(params: dict):
+#     return cancel_reservation(params)
 
-            return JSONResponse({
-                "jsonrpc": "2.0",
-                "id": request_id,
-                "result": choices
-            })
 
-        # === book_reservation ===
-        elif method == "book_reservation":
-            result = create_reservation(params)
-            return JSONResponse({"jsonrpc": "2.0", "id": request_id, "result": result})
 
-        # === Unknown method ===
-        else:
-            return JSONResponse(
-                {
-                    "jsonrpc": "2.0",
-                    "id": request_id,
-                    "error": {"code": -32601, "message": f"Unknown method {method}"},
-                }
-            )
 
-    except Exception as e:
-        print("⚠️ Exception:", str(e))
-        return JSONResponse(
-            {
-                "jsonrpc": "2.0",
-                "id": None,
-                "error": {"code": -32000, "message": str(e)},
-            }
-        )
+
+
+
+#MCP Endpoint (for Telnyx) with log debugging
+
+# @app.post("/mcp")
+# async def mcp_handler(request: Request):
+#     # VALID_API_KEY = os.getenv("X-API-KEY")  # match exactly what you set in Render
+#     # print("Loaded VALID_API_KEY:", VALID_API_KEY)
+
+#     try:
+
+#         print("Incoming Headers:", dict(request.headers))
+
+#         # # === API Key Validation ===
+#         # api_key = None
+#         # auth_header = request.headers.get("authorization")
+
+#         # if auth_header and auth_header.lower().startswith("bearer "):
+#         #     api_key = auth_header[7:]  # strip "Bearer 
+
+#         # print("Incoming Headers:", dict(request.headers))
+#         # print("Extracted API key:", api_key)
+#         # print("Loaded VALID_API_KEY:", VALID_API_KEY)
+
+#         # if api_key != VALID_API_KEY:
+#         #     print("API key mismatch!")
+#         #     return JSONResponse(
+#         #         {
+#         #             "jsonrpc": "2.0",
+#         #             "id": None,
+#         #             "error": {"code": 401, "message": "Unauthorized"},
+#         #         },
+#         #         status_code=401,
+#         #     )
+
+#         # === Parse MCP Request ===
+#         payload = await request.json()
+#         method = payload.get("method")
+#         request_id = payload.get("id")
+#         params = payload.get("params", {})
+
+#         print(f"Handling method: {method}, id: {request_id}, params: {params}")
+
+#         # === Discovery: get_tools ===
+#         if method == "get_tools":
+
+#             tools = [
+#                 {
+#                     "name": "list_restaurants",
+#                     "description": "Get all restaurants in the directory",
+#                     "input_schema": {"type": "object", "properties": {}},
+#                 },
+#                 {
+#                     "name": "check_availability",
+#                     "description": "Check open slots for a restaurant",
+#                     "input_schema": {
+#                         "type": "object",
+#                         "properties": {
+#                             "cuisine": {"type": "string"},
+#                             "party_size": {"type": "integer"},
+#                             "date": {"type": "string"},
+#                             "time": {"type": "string"},
+#                         },
+#                         "required": ["party_size", "date", "time"],
+#                     },
+#                 },
+#                 {
+#                     "name": "book_reservation",
+#                     "description": "Book a reservation at a restaurant",
+#                     "input_schema": {
+#                         "type": "object",
+#                         "properties": {
+#                             "restaurant_id": {"type": "integer"},
+#                             "availability_id": {"type": "integer"},
+#                             "user_name": {"type": "string"},
+#                             "party_size": {"type": "integer"},
+#                             "date": {"type": "string"},
+#                             "time": {"type": "string"},
+#                         },
+#                         "required": [
+#                             "restaurant_id",
+#                             "availability_id",
+#                             "user_name",
+#                             "party_size",
+#                             "date",
+#                             "time",
+#                         ],
+#                     },
+#                 },
+#             ]
+#             return JSONResponse(
+#                 {"jsonrpc": "2.0", "id": request_id, "result": {"tools": tools}}
+#             )
+
+#         #list_restaurants
+#         elif method == "list_restaurants":
+
+#             restaurants = await get_all_restaurants()
+#             return JSONResponse(
+#                 {"jsonrpc": "2.0", "id": request_id, "result": restaurants}
+#             )
+
+#         #check_availability
+#         elif method == "check_availability":
+
+#             restaurant_id = params.get("restaurant_id")
+#             availability = await get_availability(restaurant_id)
+#             return JSONResponse(
+#                 {"jsonrpc": "2.0", "id": request_id, "result": availability}
+#             )
+
+#         #dynamic_variables: Telnyx dynamic variable handler
+#         elif method == "dynamic_variables":
+#             cuisine = params.get("cuisine")
+#             party_size = params.get("party_size")
+#             date = params.get("date")
+#             time = params.get("time")
+
+#             print(f"Dynamic variables request: cuisine={cuisine}, party_size={party_size}, date={date}, time={time}")
+
+#             availability = search_availability({
+#                 "cuisine": cuisine,
+#                 "party_size": party_size,
+#                 "date": date,
+#                 "time": time
+#             })
+
+#             choices = [
+#                 {
+#                     "id": str(r["availability_id"]),
+#                     "label": f"{r['restaurant']} ({r['cuisine']}, {r['city']}) — {r['available_seats']} seats at {r['time']}"
+#                 }
+#                 for r in availability
+#             ]
+
+#             return JSONResponse({
+#                 "jsonrpc": "2.0",
+#                 "id": request_id,
+#                 "result": choices
+#             })
+
+#         #book_reservation
+#         elif method == "book_reservation":
+#             result = create_reservation(params)
+#             return JSONResponse({"jsonrpc": "2.0", "id": request_id, "result": result})
+
+
+#         else:
+#             return JSONResponse(
+#                 {
+#                     "jsonrpc": "2.0",
+#                     "id": request_id,
+#                     "error": {"code": -32601, "message": f"Unknown method {method}"},
+#                 }
+#             )
+
+#     except Exception as e:
+#         print("⚠️ Exception:", str(e))
+#         return JSONResponse(
+#             {
+#                 "jsonrpc": "2.0",
+#                 "id": None,
+#                 "error": {"code": -32000, "message": str(e)},
+#             }
+#         )
